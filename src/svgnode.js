@@ -567,6 +567,36 @@ export class SVGNode extends PIXI.Graphics {
 		}
 	}
 
+    pathContainsPath(p1, p2){
+        const segments = Snap.parsePathString(p2);
+        const point = segments[0].slice(1, 3);
+        if (Snap.path.isPointInside(p1, point[0], point[1])){
+            const intersections = Snap.path.intersection(p1, p2);
+            if (intersections.length == 0){
+                return true;
+            } else {
+                for (var inter of intersections){
+                    const tempSeg1 = segments.slice(0, inter.segment2);
+                    const tempSeg2 = segments.slice(0, inter.segment2+1);
+                    tempSeg1.toString = segments.toString;
+                    tempSeg2.toString = segments.toString;
+                    const tempPath1 = tempSeg1.toString();
+                    const tempPath2 = tempSeg2.toString();
+                    const startL = Snap.path.getTotalLength(tempPath1);
+                    const endL = Snap.path.getTotalLength(tempPath2);
+                    for (var i = startL; i <= endL; i+=(endL-startL)/10) {
+                        const p = Snap.path.getPointAtLength(p2, i);
+                        if (!Snap.path.isPointInside(p1, p.x, p.y)){
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
 	/**
 	 * Render a <path> d element
 	 * @method SVG#svgPath
@@ -591,7 +621,6 @@ export class SVGNode extends PIXI.Graphics {
         }
         for (var i = 0; i < brokenPaths.length; i++){
             const pathString = brokenPaths[i].getAttribute('d');
-            const firstPoint = Snap.parsePathString(pathString)[0].slice(1,3);
             var father = null;
             var flag = true;
             while (flag){
@@ -599,20 +628,15 @@ export class SVGNode extends PIXI.Graphics {
                 var add = true;
                 for (var sibling of children[father]){
                     const siblingPathString = brokenPaths[sibling].getAttribute('d');
-                    const siblingFirstPoint = Snap.parsePathString(siblingPathString)[0].slice(1,3);
-                    if (Snap.path.isPointInside(siblingPathString, firstPoint[0], firstPoint[1])){
-                        if (Snap.path.intersection(pathString, siblingPathString).length == 0){
-                            father = sibling;
-                            flag = true;
-                            add = false;
-                            break;
-                        }
-                    }else if (Snap.path.isPointInside(pathString, siblingFirstPoint[0], siblingFirstPoint[1])){
-                        if (Snap.path.intersection(pathString, siblingPathString).length == 0){
-                            const indx = children[father].indexOf(sibling);
-                            children[father] = children[father].slice(0, indx).concat(children[father].slice(indx+1));
-                            children[i].push(sibling);
-                        }
+                    if (this.pathContainsPath(siblingPathString, pathString)){
+                        father = sibling;
+                        flag = true;
+                        add = false;
+                        break;
+                    }else if (this.pathContainsPath(pathString, siblingPathString)){
+                        const indx = children[father].indexOf(sibling);
+                        children[father] = children[father].slice(0, indx).concat(children[father].slice(indx+1));
+                        children[i].push(sibling);
                     }
                 }
                 if (add){
